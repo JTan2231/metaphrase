@@ -5,32 +5,15 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"metaphrase/graphs"
-	"metaphrase/util"
+	"metaphrase/util/shorthand"
 )
 
-func ParseFile(filename string) {
-	file, err := os.ReadFile(filename)
-	util.CheckError(err)
-
-	println(string(file))
-}
-
-func makeRegex(pattern string) *regexp.Regexp {
-	regex, err := regexp.Compile(pattern)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return regex
-}
-
 func getSources(rootPath string) ([]string, []string) {
-	headerRegex := makeRegex(".*\\.h$")
-	sourceRegex := makeRegex(".*\\.c$")
+	headerRegex := shorthand.MakeRegex(".*\\.h$")
+	sourceRegex := shorthand.MakeRegex(".*\\.c$")
 
 	headers := make([]string, 0)
 	sources := make([]string, 0)
@@ -53,7 +36,7 @@ func getSources(rootPath string) ([]string, []string) {
 	return headers, sources
 }
 
-func getLines(filepath string) []string {
+func GetLines(filepath string) []string {
 	file, err := os.Open(filepath)
 	if err != nil {
 		log.Fatal(err)
@@ -108,11 +91,38 @@ func filenameFromPath(filepath string) string {
 }
 
 // build FileGraph with this individual file
-func processFile(fileGraph *graphs.FileGraph, filepath string) {
+func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGraph, filepath string) {
 	filename := filenameFromPath(filepath)
 	fileGraph.AddNode(filename)
-	lines := getLines(filepath)
+	lines := GetLines(filepath)
 	imports := getImports(lines)
+
+	fileGraph.AddNodeContent(filename, lines)
+
+	functionDecRegex := shorthand.MakeRegex("^(\\w+( )?){2,}\\([^!@#$+%^]+?\\)")
+
+	functions := make(map[string][]string)
+	for idx, line := range lines {
+		if functionDecRegex.MatchString(line) {
+			functionName, calls := functionGraph.RegisterFunction(filename, lines, idx)
+
+			if c, ok := functions[functionName]; ok {
+				c = append(c, calls...)
+				functions[functionName] = c
+			} else {
+				functions[functionName] = calls
+			}
+		}
+	}
+
+	// copy over/filter out undefined function calls from the functions
+	for function := range functions {
+		for _, call := range functions[function] {
+			if _, ok := functionGraph.Functions[call]; ok {
+				functionGraph.AddEdge(function, call)
+			}
+		}
+	}
 
 	for _, imp := range imports {
 		fileGraph.AddNode(imp)
@@ -121,20 +131,21 @@ func processFile(fileGraph *graphs.FileGraph, filepath string) {
 }
 
 // build FileGraph with this directory
-func BuildFileGraph(rootPath string) graphs.FileGraph {
+func BuildGraphs(rootPath string) (graphs.FileGraph, graphs.FunctionGraph) {
 	headers, sources := getSources(rootPath)
 
 	fileGraph := graphs.NewFileGraph()
+	functionGraph := graphs.NewFunctionGraph()
 
 	for _, header := range headers {
-		processFile(&fileGraph, header)
+		processFile(&fileGraph, &functionGraph, header)
 	}
 
 	for _, source := range sources {
-		processFile(&fileGraph, source)
+		processFile(&fileGraph, &functionGraph, source)
 	}
 
-	fileGraph.PrintEdges()
+	//fileGraph.PrintEdges()
 
-	return fileGraph
+	return fileGraph, functionGraph
 }

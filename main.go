@@ -5,5 +5,8 @@ import (
 )
 
 func main() {
-	c.BuildFileGraph("/home/joey/c/esn/")
+	_, f := c.BuildGraphs("/home/joey/c/esn/")
+	//g.PrintNode("main.c")
+	f.PrintEdges()
+	f.PrintNodes(false)
 }

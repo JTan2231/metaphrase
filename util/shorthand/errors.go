@@ -1,4 +1,4 @@
-package util
+package shorthand
 
 func CheckError(e error) {
 	if e != nil {

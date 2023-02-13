@@ -8,6 +8,7 @@ import (
 // neighbors are outgoing edges
 type fileNode struct {
 	Filename string
+	Content  []string
 }
 
 // directed graph
@@ -42,6 +43,28 @@ func (g FileGraph) AddNode(filename string) error {
 	}
 
 	return nil
+}
+
+func (g FileGraph) AddNodeContent(filename string, content []string) error {
+	if node, ok := g.Nodes[filename]; ok {
+		node.Content = content
+		g.Nodes[filename] = node
+
+		return nil
+	} else {
+		return errors.New(fmt.Sprintf("file_graph: node %s doesn't exist", filename))
+	}
+}
+
+func (g FileGraph) PrintNode(filename string) {
+	node := g.getNode(filename)
+	if node != nil {
+		for _, line := range node.Content {
+			fmt.Println(line)
+		}
+
+		fmt.Println("filename: " + node.Filename)
+	}
 }
 
 func (g FileGraph) edgeExists(from string, to string) bool {
