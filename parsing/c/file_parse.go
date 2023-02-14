@@ -122,24 +122,43 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 
 	fileGraph.AddNodeContent(filename, lines)
 
-	functionDecRegex := shorthand.MakeRegex(`(\w+( )?){0,}\((.*?)`)
-
 	functions := make(map[string][]string)
-	for idx, line := range lines {
-		if strings.Contains(line, `cmv_decode_intra`) {
-			fmt.Println(line)
-			fmt.Println(functionDecRegex.MatchString(line))
-		}
-		if functionDecRegex.MatchString(line) {
-			functionName, calls := functionGraph.RegisterFunction(filename, lines, idx)
 
-			if c, ok := functions[functionName]; ok {
-				c = append(c, calls...)
-				functions[functionName] = c
-			} else {
-				functions[functionName] = calls
+	fs := make([]string, 0)
+	l := 0
+	for l < len(lines) {
+		line := lines[l]
+		words := ""
+		for _, c := range line {
+			words += string(c)
+			n := len(words)
+			m := max(n-2, 0)
+			if strings.Contains(words[m:], "/*") {
+				fs = append(fs, words[:m])
+
+				words = words[m:]
+				commentEnd := false
+				for l < len(lines) && !commentEnd {
+					commentEnd = strings.Contains(lines[l], "*/")
+					l++
+				}
+
+				break
+			} else if strings.Contains(words[m:], "//") {
+				words = ""
+				continue
+			}
+
+			if words[n-1] == '(' {
+				fmt.Println(words)
+				fmt.Println("full line: " + line)
+				words = ""
+
+				continue
 			}
 		}
+
+		l++
 	}
 
 	// copy over/filter out undefined function calls from the functions
