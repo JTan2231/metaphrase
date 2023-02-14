@@ -5,8 +5,6 @@ import (
 )
 
 func main() {
-	_, f := c.BuildGraphs("/home/joey/c/esn/")
+	c.BuildGraphs("/home/joey/c/ffmpeg/")
 	//g.PrintNode("main.c")
-	f.PrintEdges()
-	f.PrintNodes(false)
 }

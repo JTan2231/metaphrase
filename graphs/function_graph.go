@@ -32,19 +32,13 @@ func NewFunctionGraph() FunctionGraph {
 func nameFromSignature(signature string) string {
 	var name string
 	i := 0
-	hasSpace := false
 	for i < len(signature) && signature[i] != '(' {
 		name += string(signature[i])
 		i++
-
-		if signature[i] == ' ' {
-			hasSpace = true
-		}
 	}
 
-	if hasSpace {
-		name = strings.Split(name, " ")[1] // take functionName from e.g. { int functionName() }
-	}
+	split := strings.Split(name, " ")
+	name = split[len(split)-1] // take functionName from e.g. { int functionName() }
 
 	return name
 }
@@ -77,6 +71,10 @@ func (g FunctionGraph) RegisterFunction(filename string, fileContent []string, f
 	functionSignature = functionSignature[:len(functionSignature)-1]
 	functionName := nameFromSignature(functionSignature)
 
+	if functionName == `cmv_decode_intra` {
+		fmt.Println(firstLine)
+	}
+
 	var functionEnd int
 	var functionDefinition []string
 
@@ -84,7 +82,7 @@ func (g FunctionGraph) RegisterFunction(filename string, fileContent []string, f
 
 	if braceStack.Len() > 0 {
 		// TODO: write a better regex or replace this with a proper parser
-		functionCallRegex := shorthand.MakeRegex("[\\w\\d_]+\\([^!@#$+%^]+?\\)")
+		functionCallRegex := shorthand.MakeRegex(`(\w\d_)+\((.*?)\)`)
 		functionEnd = functionStart + 1
 
 		for braceStack.Len() > 0 {
@@ -148,7 +146,7 @@ func (g FunctionGraph) AddEdge(from string, to string) {
 func (g FunctionGraph) PrintNodes(verbose bool) {
 	for filename, node := range g.Functions {
 		fmt.Println("function name: " + filename)
-		fmt.Println("function signature: " + node.Signature)
+		//fmt.Println("function signature: " + node.Signature)
 
 		if verbose {
 			for lineNumber, line := range node.Definition {
@@ -156,7 +154,7 @@ func (g FunctionGraph) PrintNodes(verbose bool) {
 			}
 		}
 
-		fmt.Println("----------------------")
+		//fmt.Println("----------------------")
 	}
 
 	fmt.Printf("printed %v functions\n", len(g.Functions))
@@ -171,5 +169,21 @@ func (g FunctionGraph) PrintEdges() {
 
 		fmt.Println("------------")
 	}
+}
 
+func (g FunctionGraph) PrintCounts() {
+	fmt.Printf("%v functions; %v edges\n", len(g.Functions), len(g.Edges))
+}
+
+func (g FunctionGraph) PrintNode(function string) {
+	fmt.Println("printing function " + function)
+	if node, ok := g.Functions[function]; ok {
+		for _, to := range g.Edges[function] {
+			fmt.Printf("%s -> %s\n", node.Name, to.Name)
+		}
+	} else {
+		fmt.Println("error: couldn't find " + function)
+	}
+
+	fmt.Println("------------")
 }

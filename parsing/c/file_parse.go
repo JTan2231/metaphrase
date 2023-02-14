@@ -2,6 +2,7 @@ package c
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -66,6 +67,19 @@ func max(a int, b int) int {
 	return b
 }
 
+func findAfterIndex(line string, idx int, term string) int {
+	i := idx
+	for i < len(line) {
+		if strings.Contains(term, string(line[i])) {
+			break
+		}
+
+		i++
+	}
+
+	return i
+}
+
 // get #include filenames from the given lines of a file
 // TODO: this prob needs to be more complex/comprehensive
 func getImports(lines []string) []string {
@@ -73,16 +87,25 @@ func getImports(lines []string) []string {
 
 	for _, line := range lines {
 		if len(line) > 8 && line[:8] == "#include" {
-			name_start := max(strings.Index(line, "\""), strings.Index(line, "<")) + 1
-			name_end := max(strings.LastIndex(line, "\""), strings.Index(line, ">"))
+			nameStart := findAfterIndex(line, 8, "<\"")
+			nameEnd := findAfterIndex(line, nameStart+1, ">\"")
 
-			if name_start > 0 && name_end > 0 {
-				imports = append(imports, line[name_start:name_end])
+			if nameStart > 0 && nameEnd > 0 && nameEnd < len(line) {
+				imports = append(imports, line[nameStart:nameEnd])
 			}
 		}
 	}
 
 	return imports
+}
+
+func stringFromLines(lines []string) string {
+	var out string
+	for _, line := range lines {
+		out += line
+	}
+
+	return out
 }
 
 func filenameFromPath(filepath string) string {
@@ -99,10 +122,14 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 
 	fileGraph.AddNodeContent(filename, lines)
 
-	functionDecRegex := shorthand.MakeRegex("^(\\w+( )?){2,}\\([^!@#$+%^]+?\\)")
+	functionDecRegex := shorthand.MakeRegex(`(\w+( )?){0,}\((.*?)`)
 
 	functions := make(map[string][]string)
 	for idx, line := range lines {
+		if strings.Contains(line, `cmv_decode_intra`) {
+			fmt.Println(line)
+			fmt.Println(functionDecRegex.MatchString(line))
+		}
 		if functionDecRegex.MatchString(line) {
 			functionName, calls := functionGraph.RegisterFunction(filename, lines, idx)
 
