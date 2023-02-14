@@ -59,7 +59,7 @@ func nameFromSignature(signature string) string {
 func (g FunctionGraph) RegisterFunction(filename string, fileContent []string, functionStart int) (string, []string) {
 	var functionSignature string
 	firstLine := fileContent[functionStart]
-	braceStack := brace.New()
+	braceStack := brace.New('{', '}')
 	for _, char := range firstLine {
 		if char != '{' {
 			functionSignature += string(char)

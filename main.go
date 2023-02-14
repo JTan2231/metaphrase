@@ -5,6 +5,6 @@ import (
 )
 
 func main() {
-	c.BuildGraphs("/home/joey/c/ffmpeg/")
+	c.BuildGraphs("/home/joey/c/ffmpeg/libavcodec/opusenc_utils.h")
 	//g.PrintNode("main.c")
 }

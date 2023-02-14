@@ -7,9 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"metaphrase/graphs"
 	"metaphrase/util/shorthand"
+	brace "metaphrase/util/stack"
 )
 
 func getSources(rootPath string) ([]string, []string) {
@@ -129,7 +131,7 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 	for l < len(lines) {
 		line := lines[l]
 		words := ""
-		for _, c := range line {
+		for i, c := range line {
 			words += string(c)
 			n := len(words)
 			m := max(n-2, 0)
@@ -150,9 +152,29 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 			}
 
 			if words[n-1] == '(' {
-				fmt.Println(words)
-				fmt.Println("full line: " + line)
-				words = ""
+				if n > 1 && unicode.IsLetter(rune(words[n-2])) {
+					bs := brace.New('(', ')')
+					bs.EvalPush(rune(words[n-1]))
+
+					idx := i + 1
+					for l < len(lines) && bs.Len() > 0 {
+						for bs.Len() > 0 && idx < len(lines[l]) {
+							nc := string(lines[l][idx])
+							words += nc
+							bs.EvalPush(rune(lines[l][idx]))
+							idx++
+						}
+
+						fmt.Println(words)
+
+						l++
+						idx = 0
+					}
+
+					fmt.Println(words)
+					fmt.Println("--------------------")
+					words = ""
+				}
 
 				continue
 			}
