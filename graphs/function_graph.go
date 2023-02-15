@@ -3,10 +3,16 @@ package graphs
 import (
 	"fmt"
 	"log"
-	"metaphrase/util/shorthand"
-	"metaphrase/util/stack"
 	"strings"
 )
+
+type Function struct {
+	Filename   string
+	Signature  string
+	Name       string
+	Definition []string
+	Calls      map[string]bool
+}
 
 type functionNode struct {
 	Filename        string
@@ -18,8 +24,9 @@ type functionNode struct {
 }
 
 type FunctionGraph struct {
-	Functions map[string]*functionNode
-	Edges     map[string][]*functionNode
+	Functions    map[string]*functionNode
+	Edges        map[string][]*functionNode
+	edgeQueueSet map[string]bool // probably needs a better name
 }
 
 func NewFunctionGraph() FunctionGraph {
@@ -43,85 +50,28 @@ func nameFromSignature(signature string) string {
 	return name
 }
 
-// TODO: only assumes the functions are structured like
-//
-//		void functionName(type args) {
-//
-//		need(?) to accommodate formats like
-//		    void
-//		    functionName(type args)
-//		    {
-//
-//	     i.e. this could be much more generalized
-//
-// add a new function to the graph
-// returns the parsed name of the function and a list of other functions it calls in its body
-func (g FunctionGraph) RegisterFunction(filename string, fileContent []string, functionStart int) (string, []string) {
-	var functionSignature string
-	firstLine := fileContent[functionStart]
-	braceStack := brace.New('{', '}')
-	for _, char := range firstLine {
-		if char != '{' {
-			functionSignature += string(char)
+// accepts a function object, which includes
+// the nodes outgoing edges
+func (g FunctionGraph) AddFunction(f Function) {
+	if _, ok := g.Functions[f.Name]; !ok {
+		g.Functions[f.Name] = &functionNode{
+			Name:       f.Name,
+			Filename:   f.Filename,
+			Signature:  f.Signature,
+			Definition: f.Definition,
 		}
 
-		braceStack.EvalPush(char)
-	}
-
-	functionSignature = functionSignature[:len(functionSignature)-1]
-	functionName := nameFromSignature(functionSignature)
-
-	if functionName == `cmv_decode_intra` {
-		fmt.Println(firstLine)
-	}
-
-	var functionEnd int
-	var functionDefinition []string
-
-	functionCalls := make([]string, 0)
-
-	if braceStack.Len() > 0 {
-		// TODO: write a better regex or replace this with a proper parser
-		functionCallRegex := shorthand.MakeRegex(`(\w\d_)+\((.*?)\)`)
-		functionEnd = functionStart + 1
-
-		for braceStack.Len() > 0 {
-			line := fileContent[functionEnd]
-			callLine := functionCallRegex.FindStringSubmatch(line)
-
-			// log name of called function
-			if callLine != nil {
-				var call string
-				i := 0
-				for i < len(callLine[0]) && callLine[0][i] != '(' {
-					call += string(callLine[0][i])
-					i++
+		for call := range f.Calls {
+			if node, ok := g.Functions[call]; ok {
+				if edge, ok := g.Edges[f.Name]; ok {
+					edge = append(edge, node)
+					g.Edges[f.Name] = edge
+				} else {
+					g.Edges[f.Name] = []*functionNode{node}
 				}
-
-				functionCalls = append(functionCalls, call)
 			}
-
-			// determine whether we're changing scope
-			for _, char := range line {
-				braceStack.EvalPush(char)
-			}
-
-			functionEnd++
 		}
-
-		functionDefinition = fileContent[functionStart:functionEnd]
 	}
-
-	g.Functions[functionName] = &functionNode{
-		Filename:        filename,
-		Signature:       functionSignature,
-		Name:            functionName,
-		Definition:      functionDefinition,
-		DefinitionLine:  functionStart,
-		DeclarationLine: functionStart,
-	}
-
-	return functionName, functionCalls
 }
 
 func (g FunctionGraph) AddEdge(from string, to string) {
@@ -172,7 +122,12 @@ func (g FunctionGraph) PrintEdges() {
 }
 
 func (g FunctionGraph) PrintCounts() {
-	fmt.Printf("%v functions; %v edges\n", len(g.Functions), len(g.Edges))
+	edges := 0
+	for _, e := range g.Edges {
+		edges += len(e)
+	}
+
+	fmt.Printf("%v functions; %v edges\n", len(g.Functions), edges)
 }
 
 func (g FunctionGraph) PrintNode(function string) {

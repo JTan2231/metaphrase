@@ -2,10 +2,10 @@ package c
 
 import (
 	"bufio"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"unicode"
 
@@ -69,6 +69,14 @@ func max(a int, b int) int {
 	return b
 }
 
+func min(a int, b int) int {
+	if a < b {
+		return a
+	}
+
+	return b
+}
+
 func findAfterIndex(line string, idx int, term string) int {
 	i := idx
 	for i < len(line) {
@@ -115,6 +123,28 @@ func filenameFromPath(filepath string) string {
 	return split[len(split)-1]
 }
 
+func getFunctionName(line string) string {
+	end := 0
+	for end < len(line) {
+		if line[end] == '(' {
+			break
+		}
+
+		end++
+	}
+
+	start := end - 1
+	for start > 0 {
+		if !(unicode.IsLetter(rune(line[start])) || line[start] == '_') {
+			break
+		}
+
+		start--
+	}
+
+	return strings.TrimSpace(line[start:end])
+}
+
 // build FileGraph with this individual file
 func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGraph, filepath string) {
 	filename := filenameFromPath(filepath)
@@ -124,17 +154,35 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 
 	fileGraph.AddNodeContent(filename, lines)
 
-	functions := make(map[string][]string)
+	functions := make([]graphs.Function, 0)
 
+	// this can probably be cleaned up
+	typeNames := regexp.MustCompile("void |unsigned |char |int |uint |long |float |double |static ")
+	branchingNames := regexp.MustCompile("if|while|for")
 	fs := make([]string, 0)
 	l := 0
 	for l < len(lines) {
 		line := lines[l]
+		if len(line) > 0 && line[0] == '#' {
+			skip := 1
+			tl := l
+			for tl < len(lines) && len(lines[tl]) > 0 && string(lines[tl][len(lines[tl])-1]) == `\` {
+				skip++
+				tl++
+			}
+
+			l += skip
+
+			continue
+		}
+
 		words := ""
 		for i, c := range line {
 			words += string(c)
 			n := len(words)
 			m := max(n-2, 0)
+
+			// ignore comments
 			if strings.Contains(words[m:], "/*") {
 				fs = append(fs, words[:m])
 
@@ -145,34 +193,135 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 					l++
 				}
 
+				if commentEnd {
+					l--
+				}
+
 				break
 			} else if strings.Contains(words[m:], "//") {
 				words = ""
 				continue
 			}
 
+			// potential function call/definition
 			if words[n-1] == '(' {
+				// ignore #define macros
+				if lines[l][0] == '#' {
+					continue
+				}
+
 				if n > 1 && unicode.IsLetter(rune(words[n-2])) {
+					// get the entire function signature/call with arguments
 					bs := brace.New('(', ')')
 					bs.EvalPush(rune(words[n-1]))
 
+					wordsParentheseIndex := len(words) - 1
+
 					idx := i + 1
-					for l < len(lines) && bs.Len() > 0 {
-						for bs.Len() > 0 && idx < len(lines[l]) {
-							nc := string(lines[l][idx])
+					cl := l
+					for cl < len(lines) && bs.Len() > 0 {
+						for bs.Len() > 0 && idx < len(lines[cl]) {
+							nc := string(lines[cl][idx])
 							words += nc
-							bs.EvalPush(rune(lines[l][idx]))
+
+							bs.EvalPush(rune(lines[cl][idx]))
+
 							idx++
 						}
 
-						fmt.Println(words)
-
-						l++
-						idx = 0
+						if bs.Len() == 0 {
+							break
+						} else {
+							cl++
+							idx = 0
+						}
 					}
 
-					fmt.Println(words)
-					fmt.Println("--------------------")
+					// cut off everything else in the line
+					idx = wordsParentheseIndex - 1
+					rwi := rune(words[idx])
+					for idx > 0 && (unicode.IsLetter(rwi) || rwi == '_' || rwi == ' ') {
+						idx--
+						rwi = rune(words[idx])
+					}
+
+					if !unicode.IsLetter(rune(words[idx])) {
+						idx++
+					}
+
+					words = words[idx:]
+					words = strings.TrimSpace(words)
+
+					isDefinition := false
+					isDeclaration := false
+					def := make([]string, 0)
+					// is it a function declaration/definition?
+					if typeNames.MatchString(words[:strings.Index(words, "(")]) {
+						// find the defition
+						cl = l
+						for cl < len(lines) {
+							// find the starting brace
+							for j, dc := range lines[cl] {
+								if dc == '{' {
+									// log the definition
+									isDefinition = true
+									dbs := brace.New('{', '}')
+									dbs.EvalPush(dc)
+
+									idx := j + 1
+									for cl < len(lines) && dbs.Len() > 0 {
+										def = append(def, lines[cl])
+										for dbs.Len() > 0 && idx < len(lines[cl]) {
+											dbs.EvalPush(rune(lines[cl][idx]))
+											idx++
+										}
+
+										cl++
+										idx = 0
+									}
+
+									break
+								} else if dc == ';' {
+									isDeclaration = true
+								}
+							}
+
+							if len(def) > 0 || isDeclaration {
+								break
+							}
+
+							cl++
+						}
+					}
+
+					// remove the `return` keyword if it's there
+					if len(words) > 6 && words[:7] == "return " {
+						words = words[7:]
+					}
+
+					name := getFunctionName(words)
+					if branchingNames.MatchString(name) {
+						continue
+					}
+
+					if isDefinition {
+						signature := words
+
+						functions = append(functions, graphs.Function{
+							Filename:   filename,
+							Signature:  signature,
+							Name:       name,
+							Definition: def,
+							Calls:      make(map[string]bool, 0),
+						})
+					} else {
+						// this is to throw away function declarations
+						// functions are logged in the graph only if they're defined
+						if len(functions) > 0 {
+							functions[len(functions)-1].Calls[name] = true
+						}
+					}
+
 					words = ""
 				}
 
@@ -183,13 +332,9 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 		l++
 	}
 
-	// copy over/filter out undefined function calls from the functions
-	for function := range functions {
-		for _, call := range functions[function] {
-			if _, ok := functionGraph.Functions[call]; ok {
-				functionGraph.AddEdge(function, call)
-			}
-		}
+	// add the functions to the graph
+	for _, f := range functions {
+		functionGraph.AddFunction(f)
 	}
 
 	for _, imp := range imports {
