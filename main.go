@@ -5,8 +5,8 @@ import (
 )
 
 func main() {
-	_, f := c.BuildGraphs("/home/joey/c/esn/")
+	_, f := c.BuildGraphs("/home/joey/c/git/")
 	//g.PrintNode("main.c")
-	f.PrintEdges()
 	f.PrintNodes(false)
+	f.PrintCounts()
 }
