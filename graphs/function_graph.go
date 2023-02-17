@@ -93,6 +93,14 @@ func (g FunctionGraph) AddEdge(from string, to string) {
 	}
 }
 
+func (g FunctionGraph) GetEdges(from string) []*functionNode {
+	if edges, ok := g.Edges[from]; ok {
+		return edges
+	} else {
+		return nil
+	}
+}
+
 func (g FunctionGraph) PrintNodes(verbose bool) {
 	for filename, node := range g.Functions {
 		fmt.Println("function name: " + filename)
