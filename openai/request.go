@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"metaphrase/graphs"
 	"net/http"
 )
 
-const authToken = ""
+const authToken = "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"
 
 type completionRequest struct {
 	Model            string         `json:"model"`
@@ -29,7 +30,21 @@ type completionRequest struct {
 	User             string         `json:"user,omitempty"`
 }
 
-func CreateRequest(method string, request completionRequest) (*http.Response, error) {
+type CompletionChoice struct {
+	Text         string `json:"text"`
+	Index        int    `json:"index"`
+	FinishReason string `json:"finish_reason"`
+}
+
+type CompletionResponse struct {
+	ID      string             `json:"id"`
+	Object  string             `json:"object"`
+	Created int64              `json:"created"`
+	Model   string             `json:"model"`
+	Choices []CompletionChoice `json:"choices"`
+}
+
+func MakeRequest(method string, request completionRequest) (*http.Response, error) {
 	reqBytes, err := json.Marshal(request)
 	if err != nil {
 		return nil, err
@@ -46,13 +61,62 @@ func CreateRequest(method string, request completionRequest) (*http.Response, er
 	return client.Do(req)
 }
 
-func CompletionAPICall(function string, fg *graphs.FunctionGraph) string {
-	edges := fg.GetEdges(function)
+func CompletionAPICall(function string, fg *graphs.FunctionGraph, showPrompt bool) string {
+	var functionNode *graphs.FunctionNode
+	if node, ok := fg.Functions[function]; ok {
+		functionNode = node
+	} else {
+		functionNode = nil
+	}
+
+	if functionNode == nil {
+		log.Fatal("CompletionAPICall: function " + function + " does not exist in function graph")
+	}
+
+	edges := fg.GetImports(function)
 	prompt := ""
 
 	for i, edge := range edges {
-		prompt += "// "
+		prompt += "// Function " + fmt.Sprint(i+1) + "\n"
+		for _, line := range edge.Definition {
+			prompt += line + "\n"
+		}
+
+		prompt += "\n"
 	}
 
-	return ""
+	prompt += fmt.Sprintf("// How is the function `%s` used in the other functions above?", function)
+
+	tokenCount := int(len(prompt) / 4)
+	if tokenCount > 2000 {
+		log.Fatal("CompletionAPICall: prompt contains too many tokens")
+	}
+
+	if showPrompt {
+		fmt.Println(prompt)
+	}
+
+	req := completionRequest{
+		Model:       "text-davinci-003",
+		Prompt:      prompt,
+		MaxTokens:   128,
+		Temperature: 0.5,
+	}
+
+	resp, err := MakeRequest("POST", req)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer resp.Body.Close()
+
+	var response CompletionResponse
+	err = json.NewDecoder(resp.Body).Decode(&response)
+
+	if resp.StatusCode != 200 {
+		fmt.Println(err)
+	}
+
+	return response.Choices[0].Text
 }

@@ -1,12 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"metaphrase/openai"
 	"metaphrase/parsing/c"
 )
 
 func main() {
-	_, f := c.BuildGraphs("/home/joey/c/esn/")
+	_, f := c.BuildGraphs("/home/joey/c/ffmpeg/")
 
-	openai.CompletionAPICall("matDot", &f)
+	response := openai.CompletionAPICall("dss_skip_audio_header", &f, false)
+	fmt.Println("RESPONSE: " + response)
 }

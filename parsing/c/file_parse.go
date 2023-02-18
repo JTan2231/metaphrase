@@ -315,6 +315,7 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 							Calls:      make(map[string]bool, 0),
 						})
 					} else {
+
 						// this is to throw away function declarations
 						// functions are logged in the graph only if they're defined
 						if len(functions) > 0 {
@@ -357,6 +358,8 @@ func BuildGraphs(rootPath string) (graphs.FileGraph, graphs.FunctionGraph) {
 	for _, source := range sources {
 		processFile(&fileGraph, &functionGraph, source)
 	}
+
+	functionGraph.SetEdges()
 
 	//fileGraph.PrintEdges()
 
