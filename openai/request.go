@@ -7,9 +7,8 @@ import (
 	"log"
 	"metaphrase/graphs"
 	"net/http"
+	"os"
 )
-
-const authToken = "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"
 
 type completionRequest struct {
 	Model            string         `json:"model"`
@@ -55,7 +54,7 @@ func MakeRequest(method string, request completionRequest) (*http.Response, erro
 
 	req, err := http.NewRequest(method, "https://api.openai.com/v1/completions", bytes.NewBuffer(reqBytes))
 	req.Header.Set("Accept", "application/json; charset=utf-8")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", authToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", os.Getenv("OPENAI_API_KEY")))
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 
 	return client.Do(req)
@@ -76,6 +75,10 @@ func CompletionAPICall(function string, fg *graphs.FunctionGraph, showPrompt boo
 	edges := fg.GetImports(function)
 	prompt := ""
 
+	if len(edges) == 0 {
+		log.Fatal("CompletionAPICall: function " + function + " is not used in any other functions")
+	}
+
 	for i, edge := range edges {
 		prompt += "// Function " + fmt.Sprint(i+1) + "\n"
 		for _, line := range edge.Definition {
@@ -93,7 +96,9 @@ func CompletionAPICall(function string, fg *graphs.FunctionGraph, showPrompt boo
 	}
 
 	if showPrompt {
+		fmt.Println("---------- PROMPT ----------")
 		fmt.Println(prompt)
+		fmt.Println("----------------------------")
 	}
 
 	req := completionRequest{
@@ -115,7 +120,7 @@ func CompletionAPICall(function string, fg *graphs.FunctionGraph, showPrompt boo
 	err = json.NewDecoder(resp.Body).Decode(&response)
 
 	if resp.StatusCode != 200 {
-		fmt.Println(err)
+		log.Fatal("CompletionAPICall: " + resp.Status)
 	}
 
 	return response.Choices[0].Text
