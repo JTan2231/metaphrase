@@ -146,7 +146,7 @@ func getFunctionName(line string) string {
 }
 
 // build FileGraph with this individual file
-func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGraph, filepath string) {
+func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGraph, filepath string, verbose int) {
 	filename := filenameFromPath(filepath)
 	fileGraph.AddNode(filename)
 	lines := GetLines(filepath)
@@ -315,11 +315,12 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 							Calls:      make(map[string]bool, 0),
 						})
 					} else {
-
 						// this is to throw away function declarations
 						// functions are logged in the graph only if they're defined
 						if len(functions) > 0 {
 							functions[len(functions)-1].Calls[name] = true
+						} else if verbose > 2 {
+							log.Println("    - ignoring declaration: " + name)
 						}
 					}
 
@@ -335,6 +336,10 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 
 	// add the functions to the graph
 	for _, f := range functions {
+		if verbose > 1 {
+			log.Println("  - processing function: " + f.Name)
+		}
+
 		functionGraph.AddFunction(f)
 	}
 
@@ -345,23 +350,29 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 }
 
 // build FileGraph with this directory
-func BuildGraphs(rootPath string) (graphs.FileGraph, graphs.FunctionGraph) {
+func BuildGraphs(rootPath string, verbose int) (graphs.FileGraph, graphs.FunctionGraph) {
 	headers, sources := getSources(rootPath)
 
 	fileGraph := graphs.NewFileGraph()
 	functionGraph := graphs.NewFunctionGraph()
 
 	for _, header := range headers {
-		processFile(&fileGraph, &functionGraph, header)
+		if verbose > 0 {
+			log.Println("processing file: " + header)
+		}
+
+		processFile(&fileGraph, &functionGraph, header, verbose)
 	}
 
 	for _, source := range sources {
-		processFile(&fileGraph, &functionGraph, source)
+		if verbose > 0 {
+			log.Println("processing file: " + source)
+		}
+
+		processFile(&fileGraph, &functionGraph, source, verbose)
 	}
 
 	functionGraph.SetEdges()
-
-	//fileGraph.PrintEdges()
 
 	return fileGraph, functionGraph
 }
