@@ -14,7 +14,9 @@ const DEBUG = true
 
 func main() {
 	if DEBUG {
-		golang.BuildGraphs("/home/joey/go/metaphrase/parsing/c/c.go", 1)
+		_, f := golang.BuildGraphs("/home/joey/go/wire/", 1)
+		f.PrintNodes(false)
+		f.PrintCounts()
 	} else {
 		args := os.Args[1:]
 		if len(args) == 0 {

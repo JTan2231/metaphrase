@@ -42,7 +42,10 @@ func getLines(filepath string) []string {
 
 	defer file.Close()
 
+	const oneMB int = 1048576
 	scanner := bufio.NewScanner(file)
+	buf := make([]byte, oneMB) // 1 MB
+	scanner.Buffer(buf, oneMB)
 	lines := make([]string, 0)
 
 	for scanner.Scan() {
@@ -50,7 +53,8 @@ func getLines(filepath string) []string {
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Fatal(err)
+		log.Println(lines)
+		log.Fatal("ERROR: ")
 	}
 
 	return lines
@@ -64,6 +68,15 @@ func filenameFromPath(filepath string) string {
 // TODO: duplicate function. consolidate to separate package
 func max(a int, b int) int {
 	if a > b {
+		return a
+	}
+
+	return b
+}
+
+// TODO: duplicate function. consolidate to separate package
+func min(a int, b int) int {
+	if a < b {
 		return a
 	}
 
@@ -91,7 +104,7 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 	lines := getLines(filepath)
 
 	l := 0
-	//functions := make([]graphs.Function, 0)
+	functions := make([]graphs.Function, 0)
 	packageName := ""
 
 	words := ""
@@ -116,6 +129,10 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 					l--
 				}
 
+				if words == "/*" {
+					words = ""
+				}
+
 				break
 			} else if strings.Contains(words[m:], "//") {
 				words = ""
@@ -133,21 +150,26 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 			// begin processing the function
 			m = max(len(words)-5, 0)
 			if words[m:] == "func " {
-				words = ""
-
-				i++
+				words = string(lines[l][i+1])
+				i += 2
 
 				// if this is a struct.function, back out
 				// this shouldn't be registered for context annotations
 				//
 				// TODO: could be used for something else?
-				if lines[l][i] == '(' {
+				if words[0] == '(' {
 					continue
 				}
 
-				for i < len(lines[l]) {
-					words += string(lines[l][i])
-					i++
+				// find the end of the function declaration
+				for l < len(lines) && words[len(words)-1] != '{' {
+					for i < len(lines[l]) && words[len(words)-1] != '{' {
+						words += string(lines[l][i])
+						i++
+					}
+
+					i = 0
+					l++
 				}
 
 				if words[len(words)-1] != '{' {
@@ -155,7 +177,7 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 				}
 
 				signature := words[:len(words)-2]
-				name := nameFromSignature(signature)
+				name := packageName + "." + nameFromSignature(signature)
 
 				function := graphs.Function{
 					Filename:  filename,
@@ -165,6 +187,7 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 
 				// begin processing definition
 				definition := []string{lines[l]}
+				calls := make(map[string]bool, 0)
 				l++
 				j := 0
 				bs := brace.New('{', '}')
@@ -177,13 +200,22 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 							j += 2
 						} else if lines[l][j] == '(' {
 							// probable function call
-							start := j - 1
+							start := max(j-1, 0)
 							for lines[l][start] == '.' || unicode.IsLetter(rune(lines[l][start])) {
 								start--
 							}
 
-							start++
-							log.Println("found call: " + lines[l][start:j])
+							start = min(start+1, j)
+
+							if start != j {
+								callName := lines[l][start:j]
+								calls[callName] = true
+
+								if len(strings.Split(callName, " ")) == 1 {
+									calls[packageName+"."+callName] = true
+								}
+							}
+
 							j++
 						} else {
 							bs.EvalPush(rune(lines[l][j]))
@@ -197,12 +229,19 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 				}
 
 				function.Definition = definition
+				function.Calls = calls
+
+				functions = append(functions, function)
 
 				break
 			}
 		}
 
 		l++
+	}
+
+	for _, f := range functions {
+		functionGraph.AddFunction(f)
 	}
 }
 
