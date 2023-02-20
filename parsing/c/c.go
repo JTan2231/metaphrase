@@ -39,7 +39,7 @@ func getSources(rootPath string) ([]string, []string) {
 	return headers, sources
 }
 
-func GetLines(filepath string) []string {
+func getLines(filepath string) []string {
 	file, err := os.Open(filepath)
 	if err != nil {
 		log.Fatal(err)
@@ -149,7 +149,7 @@ func getFunctionName(line string) string {
 func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGraph, filepath string, verbose int) {
 	filename := filenameFromPath(filepath)
 	fileGraph.AddNode(filename)
-	lines := GetLines(filepath)
+	lines := getLines(filepath)
 	imports := getImports(lines)
 
 	fileGraph.AddNodeContent(filename, lines)
@@ -159,7 +159,7 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 	// this can probably be cleaned up
 	typeNames := regexp.MustCompile("void |unsigned |char |int |uint |long |float |double |static ")
 	branchingNames := regexp.MustCompile("if|while|for")
-	fs := make([]string, 0)
+
 	l := 0
 	for l < len(lines) {
 		line := lines[l]
@@ -184,8 +184,6 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 
 			// ignore comments
 			if strings.Contains(words[m:], "/*") {
-				fs = append(fs, words[:m])
-
 				words = words[m:]
 				commentEnd := false
 				for l < len(lines) && !commentEnd {
