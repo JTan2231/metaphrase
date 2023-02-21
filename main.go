@@ -6,10 +6,16 @@ import (
 	"metaphrase/graphs"
 	"metaphrase/openai"
 	"metaphrase/parsing/c"
+	"metaphrase/parsing/golang"
 	"os"
 )
 
 func main() {
+
+	LANGUAGE_MAP := map[string]func(rootPath string, verbose int) (graphs.FileGraph, graphs.FunctionGraph){
+		"c":  c.BuildGraphs,
+		"go": golang.BuildGraphs,
+	}
 	args := os.Args[1:]
 	if len(args) == 0 {
 		log.Fatal("usage: <todo -- list of flags/args>")
@@ -39,10 +45,6 @@ func main() {
 		log.Fatal("define only one flag: fg or s")
 	}
 
-	if *language != "c" {
-		log.Fatal("C is currently the only supported programming language")
-	}
-
 	if len(*logFile) > 0 {
 		file, err := os.OpenFile(*logFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 		if err != nil {
@@ -57,7 +59,7 @@ func main() {
 	var f graphs.FunctionGraph
 
 	if len(*repoPath) > 0 {
-		_, f = c.BuildGraphs(*repoPath, *verbose)
+		_, f = LANGUAGE_MAP[*language](*repoPath, *verbose)
 
 		f.PrintCounts()
 
@@ -69,6 +71,7 @@ func main() {
 		f.Deserialize(*graphPath)
 
 		log.Println("function graph loaded from " + *graphPath)
+		f.PrintNodes(false)
 		f.PrintCounts()
 	}
 
