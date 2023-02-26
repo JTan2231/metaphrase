@@ -26,18 +26,24 @@ type FunctionNode struct {
 	DeclarationLine int
 }
 
+type ImportEdges struct {
+	Functions []*FunctionNode
+	Context   string
+}
+
 type FunctionGraph struct {
+	Filename           string
 	Functions          map[string]*FunctionNode
-	Dependencies       map[string][]*FunctionNode
-	Imports            map[string][]*FunctionNode
-	dependencyQueueSet map[string][]string // probably needs a better name
+	Dependencies       map[string][]*FunctionNode // functions that rely on this function
+	Imports            map[string]ImportEdges     // other functions that use this function
+	dependencyQueueSet map[string][]string        // probably needs a better name
 }
 
 func NewFunctionGraph() FunctionGraph {
 	return FunctionGraph{
 		Functions:          make(map[string]*FunctionNode),
 		Dependencies:       make(map[string][]*FunctionNode),
-		Imports:            make(map[string][]*FunctionNode),
+		Imports:            make(map[string]ImportEdges),
 		dependencyQueueSet: make(map[string][]string),
 	}
 }
@@ -108,12 +114,19 @@ func (g *FunctionGraph) SetEdges() {
 			}
 
 			if edges, ok := g.Imports[callee]; ok {
-				edges = append(edges, callerNode)
+				edges.Functions = append(edges.Functions, callerNode)
 				g.Imports[callee] = edges
 			} else {
-				g.Imports[callee] = []*FunctionNode{callerNode}
+				g.Imports[callee] = ImportEdges{Functions: []*FunctionNode{callerNode}}
 			}
 		}
+	}
+}
+
+func (g *FunctionGraph) SetImportEdgeContext(function string, context string) {
+	if edge, ok := g.Imports[function]; ok {
+		edge.Context = context
+		g.Imports[function] = edge
 	}
 }
 
@@ -125,11 +138,11 @@ func (g *FunctionGraph) GetDependencies(from string) []*FunctionNode {
 	}
 }
 
-func (g *FunctionGraph) GetImports(from string) []*FunctionNode {
+func (g *FunctionGraph) GetImports(from string) ImportEdges {
 	if edges, ok := g.Imports[from]; ok {
 		return edges
 	} else {
-		return nil
+		return ImportEdges{Functions: make([]*FunctionNode, 0)}
 	}
 }
 
@@ -161,7 +174,7 @@ func (g *FunctionGraph) PrintEdges() {
 func (g *FunctionGraph) PrintImportEdges() {
 	for from := range g.Imports {
 		node := g.Functions[from]
-		for _, to := range g.Imports[from] {
+		for _, to := range g.Imports[from].Functions {
 			log.Printf("%s -> %s\n", node.Name, to.Name)
 		}
 
@@ -172,7 +185,7 @@ func (g *FunctionGraph) PrintImportEdges() {
 func (g *FunctionGraph) PrintImportEdge(name string) {
 	log.Println("Import edges for " + name + ":")
 	if edges, ok := g.Imports[name]; ok {
-		for _, to := range edges {
+		for _, to := range edges.Functions {
 			log.Printf("  - %s -> %s\n", name, to.Name)
 		}
 	}

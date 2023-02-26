@@ -60,7 +60,7 @@ func MakeRequest(method string, request completionRequest) (*http.Response, erro
 	return client.Do(req)
 }
 
-func CompletionAPICall(function string, fg *graphs.FunctionGraph, showPrompt bool) string {
+func GetFunctionContext(function string, fg *graphs.FunctionGraph, showPrompt bool, regenerate bool) {
 	var functionNode *graphs.FunctionNode
 	if node, ok := fg.Functions[function]; ok {
 		functionNode = node
@@ -68,15 +68,26 @@ func CompletionAPICall(function string, fg *graphs.FunctionGraph, showPrompt boo
 		functionNode = nil
 	}
 
-	if functionNode == nil {
-		log.Fatal("CompletionAPICall: function " + function + " does not exist in function graph")
+	if !regenerate {
+		if edge, ok := fg.Imports[function]; ok {
+			if len(edge.Context) > 0 {
+				log.Println(edge.Context)
+				return
+			}
+		} else {
+			log.Fatal("openai.GetFunctionContext: couldn't find import edges for function " + function)
+		}
 	}
 
-	edges := fg.GetImports(function)
+	if functionNode == nil {
+		log.Fatal("openai.CompletionAPICall: function " + function + " does not exist in function graph")
+	}
+
+	edges := fg.GetImports(function).Functions
 	prompt := ""
 
 	if len(edges) == 0 {
-		log.Fatal("CompletionAPICall: function " + function + " is not used in any other functions")
+		log.Fatal("openai.GetFunctionContext: function " + function + " is not used in any other functions")
 	}
 
 	for i, edge := range edges {
@@ -92,7 +103,7 @@ func CompletionAPICall(function string, fg *graphs.FunctionGraph, showPrompt boo
 
 	tokenCount := int(len(prompt) / 4)
 	if tokenCount > 2000 {
-		log.Fatal("CompletionAPICall: prompt contains too many tokens")
+		log.Fatal("openai.CompletionAPICall: prompt contains too many tokens")
 	}
 
 	if showPrompt {
@@ -101,6 +112,20 @@ func CompletionAPICall(function string, fg *graphs.FunctionGraph, showPrompt boo
 		fmt.Println("----------------------------")
 	}
 
+	response := CompletionAPICall(prompt)
+	if edge, ok := fg.Imports[function]; ok {
+		edge.Context = response
+		fg.Imports[function] = edge
+	} else {
+		log.Fatal("openai.GetFunctionContext: couldn't find import edges for function " + function)
+	}
+
+	log.Println(response)
+	fg.Serialize(fg.Filename)
+	log.Println("updated function graph saved to " + fg.Filename)
+}
+
+func CompletionAPICall(prompt string) string {
 	req := completionRequest{
 		Model:       "text-davinci-003",
 		Prompt:      prompt,

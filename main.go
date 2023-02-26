@@ -21,6 +21,7 @@ func main() {
 
 	verbose := flag.Int("v", 0, "0 - no output\n1 - file-level\n2 - function-level\n3 - all log messages")
 	logFile := flag.String("vo", "", "log file for verbose output")
+	regenerate := flag.Bool("r", false, "trigger OpenAI API call and overwrite locally stored context")
 
 	flag.Parse()
 
@@ -48,17 +49,24 @@ func main() {
 	if len(*repoPath) > 0 {
 		f = parsing.BuildGraph(*repoPath, *verbose, *language)
 		f.PrintCounts()
-		log.Println(strings.Split(*repoPath, "/"))
 
 		var filename string
 		if len(*savePath) > 0 {
 			filename = *savePath
 		} else {
 			split := strings.Split(*repoPath, "/")
-			filename = split[len(split)-1] + ".graph"
+			filtered := make([]string, 0)
+			for _, s := range split {
+				if len(s) > 0 {
+					filtered = append(filtered, s)
+				}
+			}
+
+			filename = filtered[len(filtered)-1] + ".graph"
 		}
 
-		f.Serialize(filename)
+		f.Filename = filename
+		f.Serialize(f.Filename)
 	} else if len(*graphPath) > 0 {
 		f.Deserialize(*graphPath)
 		f.PrintCounts()
@@ -88,7 +96,6 @@ func main() {
 	}
 
 	if len(*contextFunction) > 0 {
-		response := openai.CompletionAPICall(*contextFunction, &f, false)
-		log.Println(" - GPT Response: " + response)
+		openai.GetFunctionContext(*contextFunction, &f, false, *regenerate)
 	}
 }
