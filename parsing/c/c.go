@@ -61,22 +61,6 @@ func getLines(filepath string) []string {
 	return lines
 }
 
-func max(a int, b int) int {
-	if a > b {
-		return a
-	}
-
-	return b
-}
-
-func min(a int, b int) int {
-	if a < b {
-		return a
-	}
-
-	return b
-}
-
 func findAfterIndex(line string, idx int, term string) int {
 	i := idx
 	for i < len(line) {
@@ -180,7 +164,7 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 		for i, c := range line {
 			words += string(c)
 			n := len(words)
-			m := max(n-2, 0)
+			m := shorthand.Max(n-2, 0)
 
 			// ignore comments
 			if strings.Contains(words[m:], "/*") {

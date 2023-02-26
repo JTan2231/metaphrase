@@ -5,25 +5,16 @@ import (
 	"log"
 	"metaphrase/graphs"
 	"metaphrase/openai"
-	"metaphrase/parsing/c"
-	"metaphrase/parsing/golang"
+	"metaphrase/parsing"
+	"metaphrase/util/shorthand"
 	"os"
+	"strings"
 )
 
 func main() {
-
-	LANGUAGE_MAP := map[string]func(rootPath string, verbose int) (graphs.FileGraph, graphs.FunctionGraph){
-		"c":  c.BuildGraphs,
-		"go": golang.BuildGraphs,
-	}
-	args := os.Args[1:]
-	if len(args) == 0 {
-		log.Fatal("usage: <todo -- list of flags/args>")
-	}
-
 	repoPath := flag.String("repo", "", "path to target repository directory")
 	graphPath := flag.String("fg", "", "path to target function graph file")
-	language := flag.String("l", "c", "target programming language")
+	language := flag.String("l", "", "target programming language")
 	savePath := flag.String("s", "", "serialization target path")
 
 	contextFunction := flag.String("context", "", "function to get context on how it's used in others in the target repository")
@@ -32,10 +23,6 @@ func main() {
 	logFile := flag.String("vo", "", "log file for verbose output")
 
 	flag.Parse()
-
-	if len(*repoPath) == 0 && len(*graphPath) == 0 {
-		log.Fatal("repo xor input graph file required")
-	}
 
 	if len(*repoPath) > 0 && len(*graphPath) > 0 {
 		log.Fatal("define only one flag: repo or fg")
@@ -59,19 +46,44 @@ func main() {
 	var f graphs.FunctionGraph
 
 	if len(*repoPath) > 0 {
-		_, f = LANGUAGE_MAP[*language](*repoPath, *verbose)
-
+		f = parsing.BuildGraph(*repoPath, *verbose, *language)
 		f.PrintCounts()
+		log.Println(strings.Split(*repoPath, "/"))
 
+		var filename string
 		if len(*savePath) > 0 {
-			f.Serialize(*savePath)
-			log.Println("function graph saved to " + *savePath)
+			filename = *savePath
+		} else {
+			split := strings.Split(*repoPath, "/")
+			filename = split[len(split)-1] + ".graph"
 		}
+
+		f.Serialize(filename)
 	} else if len(*graphPath) > 0 {
 		f.Deserialize(*graphPath)
+		f.PrintCounts()
+	} else {
+		log.Println("no repo/graph file provided; searching for .graph file")
 
-		log.Println("function graph loaded from " + *graphPath)
-		f.PrintNodes(false)
+		files, err := os.ReadDir("./")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		var fileFound bool
+		for _, file := range files {
+			filename := file.Name()
+			if filename[shorthand.Max(len(filename)-6, 0):] == ".graph" {
+				f.Deserialize(filename)
+				fileFound = true
+				break
+			}
+		}
+
+		if !fileFound {
+			log.Fatal("error: target repo, graph file, or graph file in this directory required")
+		}
+
 		f.PrintCounts()
 	}
 

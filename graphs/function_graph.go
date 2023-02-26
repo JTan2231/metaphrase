@@ -212,6 +212,8 @@ func (g *FunctionGraph) Serialize(filename string) {
 	if err := encoder.Encode(g); err != nil {
 		log.Fatal(err)
 	}
+
+	log.Println("function graph serialized to " + filename)
 }
 
 func (g *FunctionGraph) Deserialize(filename string) {
@@ -224,4 +226,6 @@ func (g *FunctionGraph) Deserialize(filename string) {
 	if err := decoder.Decode(&g); err != nil {
 		log.Fatal(err)
 	}
+
+	log.Println("function graph deserialized from " + filename)
 }

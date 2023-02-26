@@ -65,24 +65,6 @@ func filenameFromPath(filepath string) string {
 	return split[len(split)-1]
 }
 
-// TODO: duplicate function. consolidate to separate package
-func max(a int, b int) int {
-	if a > b {
-		return a
-	}
-
-	return b
-}
-
-// TODO: duplicate function. consolidate to separate package
-func min(a int, b int) int {
-	if a < b {
-		return a
-	}
-
-	return b
-}
-
 func nameFromSignature(signature string) string {
 	end := 0
 
@@ -114,7 +96,7 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 		for i, c := range lines[l] {
 			words += string(c)
 			n := len(words)
-			m := max(n-2, 0)
+			m := shorthand.Max(n-2, 0)
 
 			// ignore comments
 			if strings.Contains(words[m:], "/*") {
@@ -148,7 +130,7 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 
 			// found a function definition
 			// begin processing the function
-			m = max(len(words)-5, 0)
+			m = shorthand.Max(len(words)-5, 0)
 			if words[m:] == "func " {
 				words = string(lines[l][i+1])
 				i += 2
@@ -200,12 +182,12 @@ func processFile(fileGraph *graphs.FileGraph, functionGraph *graphs.FunctionGrap
 							j += 2
 						} else if lines[l][j] == '(' {
 							// probable function call
-							start := max(j-1, 0)
+							start := shorthand.Max(j-1, 0)
 							for lines[l][start] == '.' || unicode.IsLetter(rune(lines[l][start])) {
 								start--
 							}
 
-							start = min(start+1, j)
+							start = shorthand.Min(start+1, j)
 
 							if start != j {
 								callName := lines[l][start:j]
